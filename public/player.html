@@ -98,6 +98,24 @@
         socket.on('attackedByHyper', () => { isHyper = true; setTimeout(() => { isHyper = false; }, 5000); });
 
         // --- CONTROLS ---
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && isPlaying && !isDead) {
+                isDead = true;
+                socket.emit('died'); 
+                
+                // Draw the WASTED screen instantly so they see it when they return
+                const canvas = document.getElementById('gameCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = "rgba(0, 0, 0, 0.9)"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "red"; 
+                ctx.font = "bold 60px sans-serif"; 
+                ctx.textAlign = "center";
+                ctx.fillText("WASTED", canvas.width / 2, canvas.height / 2 + 20);
+                ctx.textAlign = "left";
+            }
+        });
+
         document.addEventListener('keydown', function(event) {
             if (!isPlaying || isDead) return;
             if (event.code === 'Enter') socket.emit('useItem');
@@ -171,6 +189,13 @@
             // --- OBSTACLES ---
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 let obs = obstacles[i]; obs.x -= currentSpeed; 
+                
+                // 🚨 MEMORY LEAK FIX: Delete if off-screen
+                if (obs.x + obs.w < -50) {
+                    obstacles.splice(i, 1);
+                    continue;
+                }
+
                 if (obs.type === 'bird') {
                     let birdFrame = Math.floor(Date.now() / 150) % 2 === 0 ? 134 : 180;
                     ctx.drawImage(sprite, birdFrame, 0, 46, 40, obs.x, obs.y, 46, 40);
@@ -191,11 +216,14 @@
             }
 
             // --- ITEM BOXES ---
-            ctx.fillStyle = "gold";
-            // --- DRAW ITEMS ---
-            // --- DRAW ITEMS ---
             for (let i = itemBoxes.length - 1; i >= 0; i--) {
                 let box = itemBoxes[i]; box.x -= currentSpeed; 
+                
+                // 🚨 MEMORY LEAK FIX: Delete if off-screen
+                if (box.x + 30 < -50) {
+                    itemBoxes.splice(i, 1);
+                    continue;
+                }
                 
                 // Draw the colorful Mario Box!
                 ctx.drawImage(itemImg, box.x, box.y, 30, 30);
@@ -204,6 +232,7 @@
                     socket.emit('collectedItem'); itemBoxes.splice(i, 1); 
                 }
             }
+
             // --- DRAW PLAYER ---
             let dX = 848, dY = 0; 
             if (isDucking) { dX = Math.floor(Date.now() / 100) % 2 === 0 ? 1112 : 1171; dY = 19; } 
@@ -245,8 +274,6 @@
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
             }
-            
-            // ... (keep the score display below this)
 
             // --- 🚨 FIXED SCORE DISPLAY ---
             ctx.fillStyle = "#555";

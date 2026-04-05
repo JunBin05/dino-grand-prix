@@ -43,7 +43,33 @@
 
         function startAdminRound() { socket.emit('adminStartRound'); }
 
-        socket.on('updateScores', (serverPlayers) => {
+        socket.on('updateScores', (players) => {
+            serverPlayers = players;
+            
+            // 1. Sort the players: Highest Lives first, then Highest Score
+            let sortedIds = Object.keys(players).sort((a, b) => {
+                if (players[b].lives !== players[a].lives) {
+                    return players[b].lives - players[a].lives; 
+                }
+                return players[b].score - players[a].score;
+            });
+
+            // 2. Loop through the sorted list and update the HTML Grid
+            sortedIds.forEach((id, index) => {
+                // Find this player's wrapper/container in your HTML
+                let container = document.getElementById('player-container-' + id); // Adjust ID to match your HTML!
+                
+                if (container) {
+                    if (index < 10) {
+                        // Show them and update their position in the grid
+                        container.style.display = 'block';
+                        container.style.order = index; 
+                    } else {
+                        // Hide anyone in 11th place or lower
+                        container.style.display = 'none';
+                    }
+                }
+            });
             for (let id in serverPlayers) {
                 const screen = document.getElementById(`screen-${id}`);
                 if (screen && !serverPlayers[id].dead) {
@@ -134,8 +160,17 @@
                 let pW = p.ducking ? 59 : 44, pH = p.ducking ? 28 : 47;
 
                 if (p.dead) {
-                    ctx.drawImage(sprite, 1024, 0, 44, 47, 25, (p.y || 133) * scale, 44 * scale, 47 * scale);
+                    // 💀 DRAW WASTED SCREEN
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    ctx.fillStyle = "red";
+                    ctx.font = "bold 40px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText("WASTED", canvas.width / 2, canvas.height / 2 + 15);
+                    ctx.textAlign = "left"; // Reset alignment
                 } else {
+                    // ... [Keep your existing alive Dino drawing code here] ... else {
                     let dX = 848, dY = 0;
                     if (p.ducking) { dX = Math.floor(Date.now() / 100) % 2 === 0 ? 1112 : 1171; dY = 19; } 
                     else if ((!p.isGravityCursed && p.y < 133) || (p.isGravityCursed && p.y > 20)) { dX = 848; } 
