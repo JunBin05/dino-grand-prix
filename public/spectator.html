@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GDGoC Grand Prix Matrix</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { background-color: #111; color: white; font-family: sans-serif; margin: 0; padding: 20px; }
+        .matrix-container { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
+        .mini-screen { background: #222; border: 2px solid #444; border-radius: 8px; padding: 10px; width: 300px; }
+        .mini-screen h3 { margin: 0 0 10px 0; color: #f1c40f; white-space: pre-line; line-height: 1.5; }
+        canvas { background-color: #eee; width: 100%; height: 100px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: #00ffcc;">🏆 GDGoC Dino Grand Prix</h1>
+    <h2 id="winner-announcement" style="text-align: center; color: #ff0055; display: none; font-size: 40px;"></h2>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <button id="start-btn" onclick="startAdminRound()" style="padding: 15px 40px; font-size: 24px; font-weight: bold; background-color: #2ecc71; color: black; border: none; border-radius: 8px; cursor: pointer;">🚦 START RACE 🚦</button>
+    </div>
+
+    <div class="matrix-container" id="matrix"></div>
+
+    <script>
+        const socket = io();
+        const sprite = new Image();
+        sprite.src = 'https://raw.githubusercontent.com/wayou/t-rex-runner/gh-pages/assets/default_100_percent/100-offline-sprite.png'; 
+        
+        // 🚨 ADD THIS NEW EXTERNAL IMAGE:
+        const itemImg = new Image();
+        itemImg.src = '/assets/box.png';
+
+        let gameSpeed = 1;
+        let localPlayers = {}, obstacles = [];
+        const matrixDiv = document.getElementById('matrix');
+
+        // Add Healer and Hyper emojis
+        const ICON_MAP = { 
+            'eclipse': '🌑', 'bat': '🦇', 'star': '⭐', 
+            'gravity': '🙃', 'bubble': '🫧', 'earthquake': '🌋',
+            'healer': '💖', 'hyper': '⚡' 
+        };
+
+        function startAdminRound() { socket.emit('adminStartRound'); }
+
+        socket.on('updateScores', (serverPlayers) => {
+            for (let id in serverPlayers) {
+                const screen = document.getElementById(`screen-${id}`);
+                if (screen && !serverPlayers[id].dead) {
+                    let p = serverPlayers[id];
+                    let itemIcon = p.item ? ICON_MAP[p.item] : ''; 
+                    let hearts = '❤️'.repeat(p.lives);
+                    screen.querySelector('h3').innerText = `${p.name} - ${p.score} pts ${itemIcon}\nLives: ${hearts}`;
+                }
+            }
+        });
+
+        socket.on('roundStarted', () => {
+            document.getElementById('winner-announcement').style.display = 'none';
+            document.getElementById('start-btn').style.display = 'none'; 
+            obstacles = []; 
+            for(let id in localPlayers) localPlayers[id].dead = false;
+        });
+
+        socket.on('roundEnded', (data) => {
+            const ann = document.getElementById('winner-announcement');
+            ann.innerText = `🏁 ROUND OVER! Winner: ${data.winner} (${data.score} pts) 🏁`;
+            ann.style.display = 'block';
+            document.getElementById('start-btn').style.display = 'inline-block'; 
+        });
+        
+        socket.on('updateMatrix', (players) => {
+            localPlayers = players; matrixDiv.innerHTML = ''; 
+            for (let id in localPlayers) {
+                matrixDiv.innerHTML += `
+                    <div class="mini-screen" id="screen-${id}">
+                        <h3>${localPlayers[id].name}</h3>
+                        <canvas id="canvas-${id}" width="300" height="100"></canvas>
+                    </div>`;
+            }
+        });
+
+        socket.on('playerMoved', (res) => { 
+            if (localPlayers[res.id]) {
+                localPlayers[res.id].y = res.data.y; 
+                localPlayers[res.id].ducking = res.data.ducking;
+                localPlayers[res.id].isBubbled = res.data.isBubbled;
+                localPlayers[res.id].isStar = res.data.isStar;
+                localPlayers[res.id].isGravityCursed = res.data.isGravityCursed;
+            } 
+        });
+        socket.on('playerDied', (id) => { if (localPlayers[id]) localPlayers[id].dead = true; });
+        socket.on('spawnObstacle', (obs) => { obstacles.push(obs); });
+        socket.on('setSpeed', (newSpeed) => { gameSpeed = newSpeed; });
+
+        let groundOffset = 0;
+        function renderLoop() {
+            groundOffset -= gameSpeed;
+            if (groundOffset <= -1200) groundOffset = 0;
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= gameSpeed;
+                if (obstacles[i].x < -50) obstacles.splice(i, 1); 
+            }
+
+            for (let id in localPlayers) {
+                const canvas = document.getElementById(`canvas-${id}`);
+                if (!canvas) continue;
+                const ctx = canvas.getContext('2d');
+                const p = localPlayers[id];
+                let scale = 0.5;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.drawImage(sprite, 2, 54, 1200, 12, groundOffset * scale, 170 * scale, 1200 * scale, 12 * scale);
+                ctx.drawImage(sprite, 2, 54, 1200, 12, (groundOffset + 1200) * scale, 170 * scale, 1200 * scale, 12 * scale);
+                
+                if (p.isGravityCursed) { ctx.fillStyle = "#ff00ff"; ctx.fillRect(0, 10, 300, 2); }
+
+                for (let obs of obstacles) {
+                    if (obs.type === 'bird') {
+                        let birdFrame = Math.floor(Date.now() / 150) % 2 === 0 ? 134 : 180;
+                        ctx.drawImage(sprite, birdFrame, 0, 46, 40, obs.x * scale, obs.y * scale, 46 * scale, 40 * scale);
+                    } else if (obs.type === 'item') {
+                        // Draw the colorful Mario Box for the Spectators!
+                        ctx.drawImage(itemImg, obs.x * scale, obs.y * scale, 30 * scale, 30 * scale);
+                    } else {
+                        // Draw the standard Cactus
+                        ctx.drawImage(sprite, 332, 0, 25, 50, obs.x * scale, obs.y * scale, 25 * scale, 50 * scale);
+                    }
+                }
+
+                let pY = p.ducking ? ((p.y || 133) + 19) : (p.y || 133);
+                let pW = p.ducking ? 59 : 44, pH = p.ducking ? 28 : 47;
+
+                if (p.dead) {
+                    ctx.drawImage(sprite, 1024, 0, 44, 47, 25, (p.y || 133) * scale, 44 * scale, 47 * scale);
+                } else {
+                    let dX = 848, dY = 0;
+                    if (p.ducking) { dX = Math.floor(Date.now() / 100) % 2 === 0 ? 1112 : 1171; dY = 19; } 
+                    else if ((!p.isGravityCursed && p.y < 133) || (p.isGravityCursed && p.y > 20)) { dX = 848; } 
+                    else { dX = Math.floor(Date.now() / 100) % 2 === 0 ? 936 : 980; }
+                    
+                    // 🚨 FIXED STAR EFFECT FOR BIG SCREEN
+                    if (p.isStar) {
+                        ctx.shadowBlur = 15;
+                        ctx.shadowColor = `hsl(${(Date.now() / 2) % 360}, 100%, 50%)`;
+                    }
+                    
+                    if (p.isGravityCursed) {
+                        ctx.save(); ctx.scale(1, -1);
+                        ctx.drawImage(sprite, dX, dY, pW, pH, 25, -pY * scale - (pH * scale), pW * scale, pH * scale);
+                        ctx.restore();
+                    } else {
+                        ctx.drawImage(sprite, dX, dY, pW, pH, 25, pY * scale, pW * scale, pH * scale);
+                    }
+                    
+                    // Reset shadow
+                    ctx.shadowBlur = 0; 
+
+                    if (p.isBubbled) {
+                        ctx.strokeStyle = "cyan"; ctx.lineWidth = 2; ctx.beginPath();
+                        ctx.arc(25 + (pW*scale)/2, pY*scale + (pH*scale)/2, 15, 0, Math.PI * 2); ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(renderLoop);
+        }
+        renderLoop();
+    </script>
+</body>
+</html>

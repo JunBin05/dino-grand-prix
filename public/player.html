@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dino Player</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { text-align: center; font-family: sans-serif; background-color: #222; color: white; margin-top: 50px; }
+        canvas { background-color: #eee; border: 4px solid #555; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        @keyframes shake { 0% { transform: translate(2px, 2px); } 25% { transform: translate(-2px, -2px); } 50% { transform: translate(2px, -2px); } 75% { transform: translate(-2px, 2px); } 100% { transform: translate(2px, -2px); } }
+        .shaking canvas { animation: shake 0.3s infinite; }
+    </style>
+</head>
+<body id="body">
+    <div id="login">
+        <h2>Enter Your Nickname</h2>
+        <input type="text" id="username" placeholder="Nickname" style="padding: 10px; font-size: 18px;">
+        <button onclick="joinGame()" style="padding: 10px 20px; font-size: 18px; cursor: pointer;">Join Race</button>
+    </div>
+
+    <div id="game" style="display:none;">
+        <h4 id="lives" style="color: #ff4757; font-size: 24px; margin: 5px;">Lives: ❤️❤️❤️</h4>
+        <h4 id="inventory" style="color: #00ffcc; margin: 5px;">Item: None</h4>
+        <div id="status" style="font-size: 20px; font-weight: bold; margin-bottom: 15px; color: #f1c40f;"></div>
+        <canvas id="gameCanvas" width="600" height="200"></canvas>
+    </div>
+
+    <script>
+        
+        const socket = io();
+        const sprite = new Image();
+        sprite.src = 'https://raw.githubusercontent.com/wayou/t-rex-runner/gh-pages/assets/default_100_percent/100-offline-sprite.png';
+
+        // 🚨 ADD THIS NEW EXTERNAL IMAGE:
+        const itemImg = new Image();
+        itemImg.src = '/assets/box.png';
+        
+        let isPlaying = false, isDead = false, gameSpeed = 1;
+        let obstacles = [], itemBoxes = [];
+        let isEclipsed = false, isStar = false, isBubbled = false, isGravityCursed = false;
+        let isHyper = false;
+        let localScore = 0;
+
+        // AUTHENTIC CHROME PHYSICS
+        let y = 150, velocity = 0;
+        let gravity = 0.20;    // Lowered from 0.6 (Makes you float/hang in the air longer)
+        let jumpPower = -7;   
+        let isDucking = false, invulnerable = false; 
+
+        function joinGame() {
+            const name = document.getElementById('username').value;
+            if (name) {
+                socket.emit('playerJoin', name);
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('game').style.display = 'block';
+                document.getElementById('status').innerText = "Waiting for Booth Admin to start race...";
+            }
+        }
+
+        socket.on('roundStarted', () => {
+            obstacles = []; itemBoxes = []; 
+            isEclipsed = false; isStar = false; isBubbled = false; isGravityCursed = false;
+            y = 133; velocity = 0; isDucking = false; invulnerable = false; isDead = false;
+            isPlaying = true; 
+            document.getElementById('status').innerText = `🏁 ROUND 1: SURVIVAL SPRINT!`; 
+            document.getElementById('body').className = ''; 
+            gameLoop();
+        });
+
+        socket.on('setSpeed', (newSpeed) => { gameSpeed = newSpeed; });
+        socket.on('spawnObstacle', (obs) => { 
+            // Ignore items in the obstacle loop!
+            if (isPlaying && obs.type !== 'item') obstacles.push(obs); 
+        });
+        socket.on('spawnItemBox', (box) => { if (isPlaying) itemBoxes.push(box); });
+        socket.on('itemReceived', (itemName) => { document.getElementById('inventory').innerText = `Item: ${itemName}`; });
+        
+        socket.on('updateScores', (serverPlayers) => {
+            if (serverPlayers[socket.id]) {
+                let hearts = '❤️'.repeat(serverPlayers[socket.id].lives);
+                document.getElementById('lives').innerText = 'Lives: ' + hearts;
+                invulnerable = serverPlayers[socket.id].invulnerable;
+                
+                // 🚨 SAVE OUR LIVE SCORE:
+                localScore = serverPlayers[socket.id].score;
+            }
+        });
+
+        // Trigger Death Screen locally
+        socket.on('playerDied', (id) => { if (id === socket.id) isDead = true; });
+
+        // Weapon Listeners
+        socket.on('attackedByEclipse', () => { isEclipsed = true; setTimeout(() => { isEclipsed = false; }, 4000); });
+        socket.on('attackedByEarthquake', () => { document.getElementById('body').className = 'shaking'; setTimeout(() => { document.getElementById('body').className = ''; }, 3000); });
+        socket.on('starActivated', () => { isStar = true; setTimeout(() => { isStar = false; }, 5000); });
+        socket.on('bubbleActivated', () => { isBubbled = true; });
+        socket.on('attackedByGravity', () => { isGravityCursed = true; setTimeout(() => { isGravityCursed = false; }, 4000); });
+
+        socket.on('attackedByHyper', () => { isHyper = true; setTimeout(() => { isHyper = false; }, 5000); });
+
+        // --- CONTROLS ---
+        document.addEventListener('keydown', function(event) {
+            if (!isPlaying || isDead) return;
+            if (event.code === 'Enter') socket.emit('useItem');
+            
+            if (event.code === 'Space' || event.code === 'ArrowUp') {
+                if (isGravityCursed) {
+                    if (y <= 20) velocity = jumpPower * -1; // Jump DOWN
+                } else {
+                    if (y >= 133) velocity = jumpPower; // Jump UP
+                }
+            }
+            if (event.code === 'ArrowDown') { isDucking = true; }
+        });
+
+        document.addEventListener('keyup', function(event) { 
+            if (event.code === 'ArrowDown') isDucking = false; 
+
+            // AUTHENTIC SHORT JUMP MECHANIC
+            if (event.code === 'Space' || event.code === 'ArrowUp') {
+                if (isGravityCursed && velocity > 3) velocity = 3; 
+                else if (!isGravityCursed && velocity < -3) velocity = -3; 
+            }
+        });
+
+        let groundOffset = 0; 
+        function gameLoop() {
+            if (!isPlaying) return;
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // 🚨 IF HYPER IS ACTIVE, MULTIPLY SPEED BY 1.8!
+            let currentSpeed = isHyper ? gameSpeed * 1.8 : gameSpeed;
+
+            // --- AUTHENTIC GAME OVER SCREEN ---
+            if (isDead) {
+                ctx.drawImage(sprite, 1024, 0, 44, 47, 50, y, 44, 47); // Dead Dino
+                ctx.drawImage(sprite, 655, 15, 191, 11, 204, 60, 191, 11); // GAME OVER Sprite
+                ctx.drawImage(sprite, 2, 2, 36, 32, 282, 90, 36, 32); // Restart Sprite
+                return; // FREEZE ENGINE
+            }
+
+            // --- AUTHENTIC GRAVITY / DROP MECHANISM ---
+            if (isGravityCursed) {
+                if (isDucking && y > 20) velocity -= (gravity * 3); // Fast fall UP
+                else velocity -= gravity;
+                
+                y += velocity;
+                if (y < 20) { y = 20; velocity = 0; }
+            } else {
+                if (isDucking && y < 133) velocity += (gravity * 3); // Fast fall DOWN
+                else velocity += gravity; 
+                
+                y += velocity;
+                if (y > 133) { y = 133; velocity = 0; }
+            }
+
+            socket.emit('updatePosition', { y: y, ducking: isDucking, isBubbled: isBubbled, isStar: isStar, isGravityCursed: isGravityCursed });
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            
+            groundOffset -= currentSpeed;
+            if (groundOffset <= -1200) groundOffset = 0; 
+            ctx.drawImage(sprite, 2, 54, 1200, 12, groundOffset, 170, 1200, 12);
+            ctx.drawImage(sprite, 2, 54, 1200, 12, groundOffset + 1200, 170, 1200, 12);
+            
+            if (isGravityCursed) { ctx.fillStyle = "#ff00ff"; ctx.fillRect(0, 20, 600, 2); } 
+
+            let pX = 50, pY = isDucking ? y + 19 : y;
+            let pW = isDucking ? 59 : 44, pH = isDucking ? 28 : 47;
+
+            // --- OBSTACLES ---
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i]; obs.x -= currentSpeed; 
+                if (obs.type === 'bird') {
+                    let birdFrame = Math.floor(Date.now() / 150) % 2 === 0 ? 134 : 180;
+                    ctx.drawImage(sprite, birdFrame, 0, 46, 40, obs.x, obs.y, 46, 40);
+                } else {
+                    ctx.drawImage(sprite, 332, 0, 25, 50, obs.x, obs.y, 25, 50); 
+                }
+
+                if (pX < obs.x + obs.w - 10 && pX + pW - 10 > obs.x && pY < obs.y + obs.h - 10 && pY + pH - 10 > obs.y) {
+                    if (isStar) { obstacles.splice(i, 1); } 
+                    else if (isBubbled) {
+                        isBubbled = false; obstacles.splice(i, 1); 
+                        invulnerable = true; setTimeout(() => { invulnerable = false; }, 1000); 
+                    } else if (!invulnerable) {
+                        invulnerable = true; 
+                        socket.emit('playerHit'); 
+                    }
+                }
+            }
+
+            // --- ITEM BOXES ---
+            ctx.fillStyle = "gold";
+            // --- DRAW ITEMS ---
+            // --- DRAW ITEMS ---
+            for (let i = itemBoxes.length - 1; i >= 0; i--) {
+                let box = itemBoxes[i]; box.x -= currentSpeed; 
+                
+                // Draw the colorful Mario Box!
+                ctx.drawImage(itemImg, box.x, box.y, 30, 30);
+                
+                if (pX < box.x + 30 && pX + pW > box.x && pY < box.y + 30 && pY + pH > box.y) {
+                    socket.emit('collectedItem'); itemBoxes.splice(i, 1); 
+                }
+            }
+            // --- DRAW PLAYER ---
+            let dX = 848, dY = 0; 
+            if (isDucking) { dX = Math.floor(Date.now() / 100) % 2 === 0 ? 1112 : 1171; dY = 19; } 
+            else if ((!isGravityCursed && y < 133) || (isGravityCursed && y > 20)) { dX = 848; } 
+            else { dX = Math.floor(Date.now() / 100) % 2 === 0 ? 936 : 980; } 
+            
+            // 🚨 FIXED STAR EFFECT: A Flashing Rainbow Glowing Aura!
+            if (isStar) {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = `hsl(${(Date.now() / 2) % 360}, 100%, 50%)`; 
+            }
+
+            if (!invulnerable || Math.floor(Date.now() / 150) % 2 === 0) {
+                if (isGravityCursed) {
+                    ctx.save(); ctx.scale(1, -1);
+                    ctx.drawImage(sprite, dX, dY, pW, pH, pX, -pY - pH, pW, pH);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(sprite, dX, dY, pW, pH, pX, pY, pW, pH);
+                }
+            }
+            
+            // Reset shadow so it doesn't make everything else glow
+            ctx.shadowBlur = 0; 
+
+            if (isBubbled) {
+                ctx.strokeStyle = "cyan"; ctx.lineWidth = 2; ctx.beginPath();
+                ctx.arc(pX + pW/2, pY + pH/2, 30, 0, Math.PI * 2); ctx.stroke();
+            }
+
+            // --- 🚨 FIXED ECLIPSE: THE BLINK EFFECT ---
+            if (isEclipsed) {
+                // A 1.5-second loop (1500 milliseconds)
+                let cycle = Date.now() % 1500;
+                
+                // If it is in the final 500ms of the cycle, pitch black!
+                if (cycle > 1000) {
+                    ctx.fillStyle = "black"; 
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+            
+            // ... (keep the score display below this)
+
+            // --- 🚨 FIXED SCORE DISPLAY ---
+            ctx.fillStyle = "#555";
+            ctx.font = "bold 22px sans-serif";
+            ctx.textAlign = "right";
+            let scoreText = localScore.toString().padStart(5, '0');
+            ctx.fillText("Score: " + scoreText, canvas.width - 20, 30); // Unambiguous text!
+            ctx.textAlign = "left"; 
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
