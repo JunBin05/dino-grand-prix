@@ -116,7 +116,15 @@
             } 
         });
         socket.on('playerDied', (id) => { if (localPlayers[id]) localPlayers[id].dead = true; });
-        socket.on('spawnObstacle', (obs) => { obstacles.push(obs); });
+        socket.on('spawnObstacle', (obs) => { 
+            obstacles.push(obs); 
+            // 🚨 BULLETPROOF MEMORY LEAK FIX
+            if (obstacles.length > 20) obstacles.shift(); // Delete the oldest one!
+        });
+        socket.on('spawnItemBox', (box) => {
+            obstacles.push(box); // Assuming your spectator treats boxes as obstacles
+            if (obstacles.length > 20) obstacles.shift(); 
+        });
         socket.on('setSpeed', (newSpeed) => { gameSpeed = newSpeed; });
 
         let groundOffset = 0;
