@@ -58,6 +58,17 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('died', () => {
+        let p = players[socket.id];
+        if (p && !p.dead) {
+            p.lives = 0;         // Wipe out all lives
+            p.dead = true;       // Mark as dead on the server
+            io.emit('playerDied', socket.id); // Tell the spectator to draw WASTED
+            io.emit('updateScores', players); // Update the lives UI
+            checkRoundOver();    // Check if the game should end
+        }
+    });
+
     socket.on('disconnect', () => {
         delete players[socket.id];
         io.emit('updateMatrix', players);

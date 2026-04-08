@@ -56,6 +56,33 @@
             }
         }
 
+        // 1. Create a helper function to trigger the instant WASTED screen
+        function triggerTabSwitchDeath() {
+            if (!isDead) {
+                isDead = true;
+                socket.emit('died'); 
+                
+                // Draw the WASTED screen instantly
+                const canvas = document.getElementById('gameCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = "rgba(0, 0, 0, 0.9)"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "red"; 
+                ctx.font = "bold 60px sans-serif"; 
+                ctx.textAlign = "center";
+                ctx.fillText("WASTED", canvas.width / 2, canvas.height / 2 + 20);
+                ctx.textAlign = "left";
+            }
+        }
+
+        // 2. Use the helper for mid-game tab switches
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && isPlaying && !isDead) {
+                triggerTabSwitchDeath();
+            }
+        });
+
+        // 3. Update the roundStarted logic
         socket.on('roundStarted', () => {
             obstacles = []; itemBoxes = []; 
             isEclipsed = false; isStar = false; isBubbled = false; isGravityCursed = false;
@@ -63,7 +90,13 @@
             isPlaying = true; 
             document.getElementById('status').innerText = `🏁 ROUND 1: SURVIVAL SPRINT!`; 
             document.getElementById('body').className = ''; 
-            gameLoop();
+            
+            // 🚨 ADDED: Check if they are already tabbed-out when the host hits Start!
+            if (document.hidden) {
+                triggerTabSwitchDeath();
+            } else {
+                gameLoop();
+            }
         });
 
         socket.on('setSpeed', (newSpeed) => { gameSpeed = newSpeed; });
@@ -96,25 +129,6 @@
         socket.on('attackedByGravity', () => { isGravityCursed = true; setTimeout(() => { isGravityCursed = false; }, 4000); });
 
         socket.on('attackedByHyper', () => { isHyper = true; setTimeout(() => { isHyper = false; }, 5000); });
-
-        // --- CONTROLS ---
-        document.addEventListener("visibilitychange", () => {
-            if (document.hidden && isPlaying && !isDead) {
-                isDead = true;
-                socket.emit('died'); 
-                
-                // Draw the WASTED screen instantly so they see it when they return
-                const canvas = document.getElementById('gameCanvas');
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = "rgba(0, 0, 0, 0.9)"; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "red"; 
-                ctx.font = "bold 60px sans-serif"; 
-                ctx.textAlign = "center";
-                ctx.fillText("WASTED", canvas.width / 2, canvas.height / 2 + 20);
-                ctx.textAlign = "left";
-            }
-        });
 
         document.addEventListener('keydown', function(event) {
             if (!isPlaying || isDead) return;
