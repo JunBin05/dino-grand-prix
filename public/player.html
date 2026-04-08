@@ -75,14 +75,28 @@
             }
         }
 
-        // 2. Use the helper for mid-game tab switches
+        let afkInterval; // Store the interval so we can clear it when they return
+
+        // 1. The AFK Bleed Logic
         document.addEventListener("visibilitychange", () => {
-            if (document.hidden && isPlaying && !isDead) {
-                triggerTabSwitchDeath();
+            if (!isPlaying || isDead) return;
+
+            if (document.hidden) {
+                // User tabbed out! Start bleeding lives every 2.5 seconds
+                afkInterval = setInterval(() => {
+                    if (!isDead) {
+                        socket.emit('playerHit'); // Tell server to deduct a life
+                    } else {
+                        clearInterval(afkInterval); // Stop bleeding if they are already dead
+                    }
+                }, 2500); // Adjust this number: 2500ms = 2.5 seconds per life
+            } else {
+                // User came back! Stop the bleeding.
+                clearInterval(afkInterval);
             }
         });
 
-        // 3. Update the roundStarted logic
+        // 2. Update the roundStarted logic to handle pre-game AFKers
         socket.on('roundStarted', () => {
             obstacles = []; itemBoxes = []; 
             isEclipsed = false; isStar = false; isBubbled = false; isGravityCursed = false;
@@ -91,9 +105,12 @@
             document.getElementById('status').innerText = `🏁 ROUND 1: SURVIVAL SPRINT!`; 
             document.getElementById('body').className = ''; 
             
-            // 🚨 ADDED: Check if they are already tabbed-out when the host hits Start!
             if (document.hidden) {
-                triggerTabSwitchDeath();
+                // If they are already tabbed out when the host clicks start, start bleeding immediately
+                afkInterval = setInterval(() => {
+                    if (!isDead) socket.emit('playerHit');
+                    else clearInterval(afkInterval);
+                }, 2500);
             } else {
                 gameLoop();
             }
