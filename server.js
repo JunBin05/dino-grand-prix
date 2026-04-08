@@ -10,6 +10,7 @@ app.use(express.static('public'));
 
 let players = {};
 let gameActive = false; 
+let revealPhase = 0; // Tracks the podium reveal steps
 let scoreInterval;
 let globalSpeed = 1; // AUTHENTIC STARTING SPEED
 
@@ -21,6 +22,11 @@ const ITEM_NAMES = {
 };
 
 io.on('connection', (socket) => {
+
+    socket.on('triggerNextReveal', () => {
+        revealPhase++;
+        io.emit('revealState', revealPhase);
+    });
     
     socket.on('playerJoin', (username) => {
         players[socket.id] = { id: socket.id, name: username, score: 0, y: 133, ducking: false, dead: false, item: null, lives: 3, invulnerable: false };
@@ -185,6 +191,7 @@ function checkRoundOver() {
         for (let id in players) {
             if (players[id].score > highestScore) { highestScore = players[id].score; winnerName = players[id].name; }
         }
+        revealPhase = 0; // Reset for the new podium
         io.emit('roundEnded', { winner: winnerName, score: highestScore });
     }
 }

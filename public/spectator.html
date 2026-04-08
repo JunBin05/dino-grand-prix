@@ -14,9 +14,11 @@
 <body>
     <h1 style="text-align: center; color: #00ffcc;">🏆 GDGoC Dino Grand Prix</h1>
     <h2 id="winner-announcement" style="text-align: center; color: #ff0055; display: none; font-size: 40px;"></h2>
-    
+
     <div style="text-align: center; margin-bottom: 20px;">
         <button id="start-btn" onclick="startAdminRound()" style="padding: 15px 40px; font-size: 24px; font-weight: bold; background-color: #2ecc71; color: black; border: none; border-radius: 8px; cursor: pointer;">🚦 START RACE 🚦</button>
+        
+        <button id="reveal-btn" onclick="socket.emit('triggerNextReveal')" style="display: none; padding: 15px 40px; font-size: 24px; font-weight: bold; background-color: #9b59b6; color: white; border: none; border-radius: 8px; cursor: pointer;">🥁 REVEAL NEXT 🥁</button>
     </div>
 
     <div class="matrix-container" id="matrix"></div>
@@ -99,9 +101,18 @@
 
         socket.on('roundEnded', (data) => {
             const ann = document.getElementById('winner-announcement');
-            ann.innerText = `🏁 ROUND OVER! Winner: ${data.winner} (${data.score} pts) 🏁`;
+            ann.innerText = `🏁 ROUND OVER! 🏁`; // Keep it mysterious for now!
             ann.style.display = 'block';
-            document.getElementById('start-btn').style.display = 'inline-block'; 
+            
+            // Hide the Start button, show the Reveal button
+            document.getElementById('start-btn').style.display = 'none'; 
+            document.getElementById('reveal-btn').style.display = 'inline-block';
+            
+            // Hide all players initially to prepare for the reveal
+            for (let id in serverPlayers) {
+                let container = document.getElementById('screen-' + id);
+                if (container) container.style.display = 'none';
+            }
         });
         
         socket.on('updateMatrix', (players) => {
@@ -123,6 +134,46 @@
                 localPlayers[res.id].isStar = res.data.isStar;
                 localPlayers[res.id].isGravityCursed = res.data.isGravityCursed;
             } 
+        });
+        socket.on('revealState', (phase) => {
+            // Sort players to know who is in what position
+            let sortedIds = Object.keys(serverPlayers).sort((a, b) => {
+                if (serverPlayers[b].lives !== serverPlayers[a].lives) return serverPlayers[b].lives - serverPlayers[a].lives; 
+                return serverPlayers[b].score - serverPlayers[a].score;
+            });
+
+            if (phase === 1) {
+                // PHASE 1: Show 4th through 10th place
+                document.getElementById('winner-announcement').innerText = "Top 10 Finalists...";
+                sortedIds.forEach((id, index) => {
+                    let container = document.getElementById('screen-' + id);
+                    if (container && index >= 3 && index < 10) {
+                        container.style.display = 'block';
+                        container.style.order = index; 
+                    }
+                });
+            } 
+            else if (phase === 2) {
+                // PHASE 2: Show 3rd Place
+                document.getElementById('winner-announcement').innerText = "🥉 3rd Place! 🥉";
+                if (sortedIds[2]) document.getElementById('screen-' + sortedIds[2]).style.display = 'block';
+            }
+            else if (phase === 3) {
+                // PHASE 3: Show 2nd Place
+                document.getElementById('winner-announcement').innerText = "🥈 2nd Place! 🥈";
+                if (sortedIds[1]) document.getElementById('screen-' + sortedIds[1]).style.display = 'block';
+            }
+            else if (phase === 4) {
+                // PHASE 4: Show 1st Place & Reset Buttons
+                let winnerName = serverPlayers[sortedIds[0]] ? serverPlayers[sortedIds[0]].name : "Unknown";
+                document.getElementById('winner-announcement').innerText = `🏆 CHAMPION: ${winnerName} 🏆`;
+                if (sortedIds[0]) document.getElementById('screen-' + sortedIds[0]).style.display = 'block';
+                
+                // Swap the buttons back so you can start a new round!
+                document.getElementById('reveal-btn').style.display = 'none';
+                document.getElementById('start-btn').style.display = 'inline-block';
+                document.getElementById('start-btn').innerText = '🚦 START NEW RACE 🚦';
+            }
         });
         socket.on('playerDied', (id) => { if (localPlayers[id]) localPlayers[id].dead = true; });
         socket.on('spawnObstacle', (obs) => { 
