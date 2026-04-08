@@ -75,27 +75,14 @@
             }
         }
 
-        let afkInterval; // Store the interval so we can clear it when they return
-
-        // 1. The AFK Bleed Logic
+        // --- 1. THE INSTANT DEATH LOGIC ---
         document.addEventListener("visibilitychange", () => {
-            if (!isPlaying || isDead) return;
-
-            if (document.hidden) {
-                // User tabbed out! Start bleeding lives every 2.5 seconds
-                afkInterval = setInterval(() => {
-                    if (!isDead) {
-                        socket.emit('playerHit'); // Tell server to deduct a life
-                    } else {
-                        clearInterval(afkInterval); // Stop bleeding if they are already dead
-                    }
-                }, 2500); // Adjust this number: 2500ms = 2.5 seconds per life
-            } else {
-                // User came back! Stop the bleeding.
-                clearInterval(afkInterval);
+            if (document.hidden && isPlaying && !isDead) {
+                triggerTabSwitchDeath();
             }
         });
 
+        // --- 2. ROUND START LOGIC ---
         socket.on('roundStarted', () => {
             obstacles = []; itemBoxes = []; 
             isEclipsed = false; isStar = false; isBubbled = false; isGravityCursed = false;
@@ -105,16 +92,12 @@
             document.getElementById('body').className = ''; 
             
             if (document.hidden) {
-                // If they are already tabbed out when the host clicks start, start bleeding immediately
-                afkInterval = setInterval(() => {
-                    if (!isDead) socket.emit('playerHit');
-                    else clearInterval(afkInterval);
-                }, 2500);
-            } 
-            
-            // 🚨 THE FIX: Always start the game loop! 
-            // The browser will automatically pause the rendering in the background and resume it when they return.
-            gameLoop();
+                // If they are already tabbed out when the host clicks start, INSTANT DEATH
+                triggerTabSwitchDeath();
+            } else {
+                // Otherwise, start the game normally!
+                gameLoop();
+            }
         });
 
         socket.on('setSpeed', (newSpeed) => { gameSpeed = newSpeed; });
