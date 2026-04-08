@@ -57,7 +57,7 @@
             // 2. Loop through the sorted list and update the HTML Grid
             sortedIds.forEach((id, index) => {
                 // Find this player's wrapper/container in your HTML
-                let container = document.getElementById('player-container-' + id); // Adjust ID to match your HTML!
+                let container = document.getElementById('screen-' + id);
                 
                 if (container) {
                     if (index < 10) {
@@ -82,10 +82,19 @@
         });
 
         socket.on('roundStarted', () => {
-            document.getElementById('winner-announcement').style.display = 'none';
-            document.getElementById('start-btn').style.display = 'none'; 
-            obstacles = []; 
-            for(let id in localPlayers) localPlayers[id].dead = false;
+            obstacles = []; itemBoxes = []; 
+            isEclipsed = false; isStar = false; isBubbled = false; isGravityCursed = false;
+            y = 133; velocity = 0; isDucking = false; invulnerable = false; isDead = false;
+            isPlaying = true; 
+            document.getElementById('status').innerText = `🏁 ROUND 1: SURVIVAL SPRINT!`; 
+            document.getElementById('body').className = ''; 
+            
+            // 🚨 ADDED: Check if they are already tabbed-out when the host hits Start!
+            if (document.hidden) {
+                triggerTabSwitchDeath();
+            } else {
+                gameLoop();
+            }
         });
 
         socket.on('roundEnded', (data) => {
