@@ -84,18 +84,17 @@
         });
 
         socket.on('roundStarted', () => {
-            obstacles = []; itemBoxes = []; 
-            isEclipsed = false; isStar = false; isBubbled = false; isGravityCursed = false;
-            y = 133; velocity = 0; isDucking = false; invulnerable = false; isDead = false;
-            isPlaying = true; 
-            document.getElementById('status').innerText = `🏁 ROUND 1: SURVIVAL SPRINT!`; 
-            document.getElementById('body').className = ''; 
+            // Hide the podium text and both buttons
+            document.getElementById('winner-announcement').style.display = 'none';
+            document.getElementById('start-btn').style.display = 'none'; 
+            document.getElementById('reveal-btn').style.display = 'none'; 
             
-            // 🚨 ADDED: Check if they are already tabbed-out when the host hits Start!
-            if (document.hidden) {
-                triggerTabSwitchDeath();
-            } else {
-                gameLoop();
+            // Clear the track
+            obstacles = []; 
+            
+            // 🚨 THE FIX: Bring everyone back to life on the spectator screen!
+            for (let id in localPlayers) {
+                localPlayers[id].dead = false; 
             }
         });
 
