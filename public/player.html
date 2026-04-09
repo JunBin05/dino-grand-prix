@@ -96,7 +96,9 @@
                 triggerTabSwitchDeath();
             } else {
                 // Otherwise, start the game normally!
-                gameLoop();
+                // 🚨 THE FIX: Force physics to run at exactly 60 FPS for everyone!
+                if (window.gameTimer) clearInterval(window.gameTimer);
+                window.gameTimer = setInterval(gameLoop, 16);
             }
         });
 
@@ -298,7 +300,6 @@
             ctx.fillText("Score: " + scoreText, canvas.width - 20, 30); // Unambiguous text!
             ctx.textAlign = "left"; 
 
-            requestAnimationFrame(gameLoop);
         }
     </script>
 </body>

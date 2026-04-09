@@ -266,9 +266,9 @@
                     }
                 }
             }
-            requestAnimationFrame(renderLoop);
         }
-        renderLoop();
+        // 🚨 THE FIX: Force the spectator wall to run at exactly 60 FPS!
+        setInterval(renderLoop, 16);
     </script>
 </body>
 </html>
