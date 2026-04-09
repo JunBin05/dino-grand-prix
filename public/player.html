@@ -98,7 +98,7 @@
                 // Otherwise, start the game normally!
                 // 🚨 THE FIX: Force physics to run at exactly 60 FPS for everyone!
                 if (window.gameTimer) clearInterval(window.gameTimer);
-                window.gameTimer = setInterval(gameLoop, 16);
+                window.gameTimer = setInterval(gameLoop, 10);
             }
         });
 
