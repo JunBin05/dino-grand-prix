@@ -169,7 +169,7 @@ function startRound() {
         
         // AUTHENTIC ACCELERATION
         if (anyoneAlive) {
-            if (globalSpeed < 13) {
+            if (globalSpeed < 30) {
                 globalSpeed += 0.01; // Smooth gradual speed increase
                 io.emit('setSpeed', globalSpeed);
             }
