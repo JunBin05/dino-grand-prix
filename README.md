@@ -43,7 +43,7 @@ export PROJECT_NUM=$(gcloud projects describe $PROJECT_ID --format="value(projec
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:${PROJECT_NUM}-compute@developer.gserviceaccount.com" \
-  --role="roles/editor"
+  --role="roles/run.builder"
 ```
 
 ## 🚀 Part 4: The "Magic" Deploy
