@@ -28,7 +28,7 @@ Let's pull the game engine from GitHub directly into our Cloud Shell environment
 
 In your Cloud Shell terminal, copy and paste this command:
 ```bash
-git clone [https://github.com/JunBin05/dino-grand-prix.git](https://github.com/JunBin05/dino-grand-prix.git)
+git clone https://github.com/JunBin05/dino-grand-prix.git
 cd dino-grand-prix
 ```
 
@@ -44,6 +44,7 @@ export PROJECT_NUM=$(gcloud projects describe $PROJECT_ID --format="value(projec
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:${PROJECT_NUM}-compute@developer.gserviceaccount.com" \
   --role="roles/run.builder"
+  --role="roles/editor"
 ```
 
 ## 🚀 Part 4: The "Magic" Deploy
