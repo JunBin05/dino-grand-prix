@@ -4,6 +4,12 @@ Welcome to the GDGoC UM Cloud Workshop! Today, we are leveling up to **Serverles
 
 You are going to deploy your very own real-time multiplayer game to the internet using **Google Cloud Run**. By the end of this guide, you will have a live game server capable of hosting dozens of players simultaneously with zero lag!
 
+### ⚠️ Solo Testing Warning (Anti-Cheat)
+This game features an active "Anti-Cheat" mechanism built using the Page Visibility API. If a player switches tabs or minimizes the browser while a race is active, their dinosaur will instantly die and be marked as **WASTED**.
+
+**If you are testing the game by yourself:**
+You cannot switch back and forth between the Player tab and the Spectator tab. You **must** drag the tabs so they are open side-by-side on your monitor simultaneously.
+
 ---
 
 ## 🛠️ Prerequisites
